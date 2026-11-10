@@ -41,11 +41,11 @@ describe("fusión con la hoja", () => {
 
 describe("lista de torneos atada a la hoja", () => {
   it("una lista de otra hoja no cuenta (no borra torneos al cambiar de hoja)", async () => {
-    const { remotasActuales } = await import("./store");
-    const base = { remotas: ["x1", "x2"], remotasUrl: "https://script.google.com/macros/s/VIEJA/exec" };
-    expect(remotasActuales({ ...base, urlLocal: "https://script.google.com/macros/s/VIEJA/exec" })).toEqual(["x1", "x2"]);
-    expect(remotasActuales({ ...base, urlLocal: "https://script.google.com/macros/s/NUEVA/exec" })).toEqual([]);
-    expect(remotasActuales({ ...base, urlLocal: "" })).toEqual([]);
+    const { remotasActuales, urlNube } = await import("./store");
+    const actual = urlNube({ urlLocal: "" }); // la hoja oficial
+    expect(remotasActuales({ remotas: ["x1", "x2"], remotasUrl: actual, urlLocal: "" })).toEqual(["x1", "x2"]);
+    expect(remotasActuales({ remotas: ["x1", "x2"], remotasUrl: "https://script.google.com/macros/s/VIEJA/exec", urlLocal: "" })).toEqual([]);
+    expect(remotasActuales({ remotas: ["x1", "x2"], remotasUrl: "", urlLocal: "" })).toEqual([]);
     // con la lista vacía, una hoja nueva sin esos torneos no los quita de aquí
     const local = liga("Mía");
     expect(fusionar([local], [], []).ligas).toHaveLength(1);
