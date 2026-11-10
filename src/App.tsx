@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useAvisos, useLigas } from "./store";
+import { esAdmin, urlNube, useAvisos, useLigas } from "./store";
 import { Avatar, Ic, ir, useRuta } from "./ui";
 import { Intro } from "./components/Intro";
 import { Cursor } from "./components/Cursor";
@@ -8,6 +8,7 @@ import { Asistente } from "./components/Asistente";
 import { Inicio } from "./views/Inicio";
 import { LigaView } from "./views/Liga";
 import { Compartido } from "./views/Compartido";
+import { AdminModal, EstadoNubeChip } from "./components/Nube";
 
 const INTRO_VISTA = "topspin.intro";
 const leerSesion = (k: string) => { try { return sessionStorage.getItem(k); } catch { return null; } };
@@ -24,6 +25,17 @@ export function App() {
   }, []);
 
   useEffect(() => { document.documentElement.dataset.tema = tema; }, [tema]);
+  // sincronización con la hoja: al abrir, al volver a la pestaña y cada 45 s
+  const url = useLigas((s) => urlNube(s));
+  useEffect(() => {
+    if (!url) return;
+    const cargar = () => { if (document.visibilityState === "visible") void useLigas.getState().cargarNube(); };
+    cargar();
+    const t = setInterval(cargar, 45000);
+    window.addEventListener("focus", cargar);
+    document.addEventListener("visibilitychange", cargar);
+    return () => { clearInterval(t); window.removeEventListener("focus", cargar); document.removeEventListener("visibilitychange", cargar); };
+  }, [url]);
   useEffect(() => {
     const ver = () => setIntro(true);
     window.addEventListener("topspin:intro", ver);
@@ -55,7 +67,11 @@ export function App() {
 }
 
 function BarraSuperior({ alNueva, compartido }: { alNueva: () => void; compartido: boolean }) {
-  const { ligas, tema, setTema } = useLigas();
+  const estado = useLigas();
+  const { ligas, tema, setTema } = estado;
+  const [admin, setAdmin] = useState(false);
+  const conNube = !!urlNube(estado);
+  const soyAdmin = esAdmin(estado);
   const ruta = useRuta();
   const actual = ruta.vista === "liga" ? ligas.find((l) => l.id === ruta.id) : undefined;
   const [menu, setMenu] = useState(false);
@@ -98,6 +114,14 @@ function BarraSuperior({ alNueva, compartido }: { alNueva: () => void; compartid
         </div>
       )}
       <span className="spacer" />
+      {!compartido && <span className="hide-sm"><EstadoNubeChip /></span>}
+      {!compartido && conNube && (
+        <button className={`btn btn-icon ${soyAdmin ? "btn-admin" : "btn-ghost"}`} onClick={() => setAdmin(true)}
+          aria-label={soyAdmin ? "Modo administrador activo" : "Entrar como administrador"} title={soyAdmin ? "Administrador" : "Entrar como administrador"}>
+          {soyAdmin ? <Ic.unlock /> : <Ic.lock />}
+        </button>
+      )}
+      <AdminModal abierto={admin} alCerrar={() => setAdmin(false)} />
       <button className="btn btn-ghost btn-icon" onClick={() => setTema(tema === "oscuro" ? "claro" : "oscuro")} aria-label={tema === "oscuro" ? "Usar tema claro" : "Usar tema oscuro"}>
         {tema === "oscuro" ? <Ic.sun /> : <Ic.moon />}
       </button>

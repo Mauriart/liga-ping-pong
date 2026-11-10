@@ -708,3 +708,27 @@ sup.emp, b.emp { font: 900 13px var(--display); color: var(--volt-txt); margin-l
 .walk.es-final .walk-top .eyebrow { color: var(--oro); }
 .g-etq { color: var(--oro) !important; font: 800 11px var(--display) !important; letter-spacing: .1em; text-transform: uppercase; }
 @media (max-width: 560px) { .podio { grid-template-columns: 1fr; } .ff-partidos { grid-template-columns: 1fr; } }
+
+/* ---------- nube (Google Sheets) ---------- */
+.torneos { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 80px; }
+.conectar-nube { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 20px; border-radius: var(--r); background: var(--s1); border: 1px dashed var(--linea-2); }
+.conectar-nube > svg { color: var(--volt-txt); flex-shrink: 0; }
+.conectar-nube div { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 3px; }
+.conectar-nube b { font: italic 900 19px var(--display); font-stretch: 80%; text-transform: uppercase; }
+.conectar-nube span { color: var(--suave); font-size: 14px; }
+.error-nube { border-color: rgba(255,77,94,.4); }
+.error-nube svg { color: var(--pierde); }
+.etq.nube { background: rgba(47,123,255,.16); color: #7fb0ff; }
+[data-tema="claro"] .etq.nube { color: #1f5fd6; }
+.lcard-botones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; position: relative; }
+.lcard .lcard-nombre { border: 0; background: none; padding: 0; text-align: left; color: inherit; }
+.lcard .lcard-nombre:hover { color: var(--volt-txt); }
+.lcard:hover { transform: none; }
+.nube-chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border-radius: 999px; border: 1px solid var(--linea-2); background: var(--s1); color: var(--suave); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.nube-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--gana); }
+.nube-chip.cargando i, .nube-chip.guardando i { background: var(--oro); animation: latido 1s infinite; }
+.nube-chip.error i { background: var(--pierde); }
+.btn-admin { background: var(--volt); color: #000; border-color: transparent; }
+.pasos-guia { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; color: var(--suave); font-size: 14px; }
+.pasos-guia b { color: var(--texto); }
+code { font: 600 12.5px ui-monospace, Consolas, monospace; padding: 1px 5px; border-radius: 4px; background: var(--s3); }

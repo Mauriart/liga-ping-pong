@@ -61,6 +61,8 @@ export interface Liga {
   partidos: Partido[];
   generado: boolean;
   orden_inicial?: string[];
+  /** Último cambio (ISO); decide qué versión gana al sincronizar con la hoja. */
+  actualizado?: string;
 }
 
 export interface Fila {

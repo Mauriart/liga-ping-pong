@@ -35,7 +35,9 @@ Otros comandos:
 
 ## Datos
 
-- Se guardan en el navegador (`localStorage`). Para pasar ligas a otra compu: **Ajustes → Exportar** y luego **Importar** en el inicio.
+- **Base de datos en Google Sheets** (opcional): cada torneo es una fila de una hoja tuya. Cualquiera ve los torneos desde el inicio (botones *Ver torneo*, *Tabla*, *Partidos*); solo quien tiene la clave de administrador (candado de la barra) puede crear y cargar resultados, y cada cambio se guarda solo en la hoja. Guía: [apps-script/LEEME.md](apps-script/LEEME.md).
+- Sin hoja conectada, los torneos se guardan en el navegador (`localStorage`). Para pasarlos a otra compu: **Ajustes → Exportar** y luego **Importar** en el inicio.
+- Para que todos usen la misma hoja sin configurar nada, define `VITE_SHEETS_URL` en `.env` (ver `.env.example`).
 - **Importar** acepta también el `ligas.json` de la primera versión en Python.
 
 ## Publicar en GitHub Pages

@@ -8,8 +8,8 @@ import { Mesa3D } from "./Mesa";
  * Presentación tipo transmisión: la mesa sube al centro, cada jugador entra
  * desde su lado con sus números y cae el «VS». Desde aquí se registra el resultado.
  */
-export function Presentacion({ liga, partidoId, alCerrar, alRegistrar, alOtro }: {
-  liga: m.Vista; partidoId: string | null; alCerrar: () => void; alRegistrar: (id: string) => void; alOtro: (id: string) => void;
+export function Presentacion({ liga, partidoId, alCerrar, alRegistrar, alOtro, editable = true }: {
+  liga: m.Vista; partidoId: string | null; editable?: boolean; alCerrar: () => void; alRegistrar: (id: string) => void; alOtro: (id: string) => void;
 }) {
   const p = liga.partidos.find((x) => x.id === partidoId);
   const pendientes = liga.partidos.filter((x) => !x.bye && x.a && x.b && !x.marcador).sort((x, y) => x.ronda - y.ronda || x.orden - y.orden);
@@ -19,22 +19,22 @@ export function Presentacion({ liga, partidoId, alCerrar, alRegistrar, alOtro }:
     if (!p) return;
     const k = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.stopPropagation(); alCerrar(); }
-      else if (e.key === "Enter" && !p.marcador) { e.preventDefault(); alRegistrar(p.id); }
+      else if (e.key === "Enter" && !p.marcador && editable) { e.preventDefault(); alRegistrar(p.id); }
       else if (e.key === "ArrowRight" && siguiente) alOtro(siguiente.id);
     };
     window.addEventListener("keydown", k, true);
     return () => window.removeEventListener("keydown", k, true);
-  }, [p, siguiente, alCerrar, alRegistrar, alOtro]);
+  }, [p, siguiente, alCerrar, alRegistrar, alOtro, editable]);
 
   return (
     <AnimatePresence>
-      {p && <Escena key={p.id} liga={liga} p={p} siguiente={siguiente} alCerrar={alCerrar} alRegistrar={alRegistrar} alOtro={alOtro} />}
+      {p && <Escena key={p.id} liga={liga} p={p} siguiente={siguiente} editable={editable} alCerrar={alCerrar} alRegistrar={alRegistrar} alOtro={alOtro} />}
     </AnimatePresence>
   );
 }
 
-function Escena({ liga, p, siguiente, alCerrar, alRegistrar, alOtro }: {
-  liga: m.Vista; p: m.Partido; siguiente?: m.Partido; alCerrar: () => void; alRegistrar: (id: string) => void; alOtro: (id: string) => void;
+function Escena({ liga, p, siguiente, editable, alCerrar, alRegistrar, alOtro }: {
+  liga: m.Vista; p: m.Partido; siguiente?: m.Partido; editable: boolean; alCerrar: () => void; alRegistrar: (id: string) => void; alOtro: (id: string) => void;
 }) {
   const fila = (id: string | null) => liga.tabla.find((f) => f.id === id);
   const fa = fila(p.a), fb = fila(p.b);
@@ -95,7 +95,7 @@ function Escena({ liga, p, siguiente, alCerrar, alRegistrar, alOtro }: {
         </div>
         <div className="walk-acciones">
           {siguiente && <button className="btn" onClick={() => alOtro(siguiente.id)}>Siguiente partido <Ic.arrow /></button>}
-          <button className="btn btn-primary" onClick={() => alRegistrar(p.id)}><Ic.score /> {p.marcador ? "Editar resultado" : "Registrar resultado"}</button>
+          {editable && <button className="btn btn-primary" onClick={() => alRegistrar(p.id)}><Ic.score /> {p.marcador ? "Editar resultado" : "Registrar resultado"}</button>}
         </div>
       </motion.div>
     </motion.div>

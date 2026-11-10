@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import * as m from "../engine/motor";
-import { avisar, fallo, intentar, useLigas } from "../store";
+import { avisar, fallo, intentar, puedeEditar, useLigas } from "../store";
 import { Avatar, Ic, Modal, confirmar, descargar, haceCuanto, ir, plural } from "../ui";
 import { Mesa3D, MiniMesa, Placa } from "../components/Mesa";
 import { Resultado, siguientePendiente } from "../components/Resultado";
@@ -12,6 +12,8 @@ import { Formatos, Reglas } from "../components/Reglas";
 
 const escribiendo = (e: KeyboardEvent) => (e.target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]");
 const hayCapa = () => !!document.querySelector(".overlay, .walk, .intro");
+/** false = torneo de la nube visto sin clave de administrador (solo lectura). */
+const Editable = createContext(true);
 
 export function LigaView({ id, tab }: { id: string; tab: string }) {
   const liga = useLigas((s) => s.ligas.find((l) => l.id === id));
@@ -21,14 +23,18 @@ export function LigaView({ id, tab }: { id: string; tab: string }) {
   const [alta, setAlta] = useState(false);
   const [compartir, setCompartir] = useState(false);
   const [ficha, setFicha] = useState<string | null>(null);
+  const editable = useLigas((s) => puedeEditar(s, id));
+  // sin permiso de edición, tocar un partido lo presenta en vez de abrir el resultado
+  const abrir = editable ? setResultado : setPresenta;
 
   const esKO = v?.config.formato === "ko";
-  const tabs = esKO ? ["cuadro", "partidos", "jugadores", "ajustes"] : ["tabla", "partidos", "jugadores", "ajustes"];
+  const tabs = (esKO ? ["cuadro", "partidos", "jugadores", "ajustes"] : ["tabla", "partidos", "jugadores", "ajustes"]).filter((t) => editable || t !== "ajustes");
   const tabActual = tabs.includes(tab) ? tab : tabs[0];
   const irTab = (t: string) => ir(`#/liga/${id}/${t}`);
 
   const registrarSiguiente = () => {
     if (!v) return;
+    if (!editable) { presentarSiguiente(); return; }
     if (!v.generado) { fallo("Primero suma jugadores para generar el calendario."); return; }
     const s = siguientePendiente(v);
     if (s) setResultado(s.id);
@@ -44,7 +50,7 @@ export function LigaView({ id, tab }: { id: string; tab: string }) {
     const k = (e: KeyboardEvent) => {
       if (escribiendo(e) || hayCapa() || e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.key.toLowerCase();
-      if (t === "j") { e.preventDefault(); setAlta(true); }
+      if (t === "j" && editable) { e.preventDefault(); setAlta(true); }
       else if (t === "r") { e.preventDefault(); registrarSiguiente(); }
       else if (t === "p") { e.preventDefault(); presentarSiguiente(); }
       else if (t === "s" && v?.generado) { e.preventDefault(); setCompartir(true); }
@@ -65,11 +71,11 @@ export function LigaView({ id, tab }: { id: string; tab: string }) {
   }
 
   return (
-    <>
+    <Editable.Provider value={editable}>
       <Ticker v={v} />
       <main className="contenedor">
         <Encabezado v={v} alAlta={() => setAlta(true)} alRegistrar={registrarSiguiente} alCompartir={() => setCompartir(true)} />
-        <Escenario v={v} alPresentar={setPresenta} alRegistrar={setResultado} alAlta={() => setAlta(true)} />
+        <Escenario v={v} alPresentar={setPresenta} alRegistrar={abrir} alAlta={() => setAlta(true)} />
 
         <nav className="tabs" role="tablist" aria-label="Secciones de la liga">
           {tabs.map((t, i) => {
@@ -85,21 +91,21 @@ export function LigaView({ id, tab }: { id: string; tab: string }) {
         </nav>
 
         <section className="pestana" key={tabActual}>
-          {tabActual === "tabla" && <TablaTab v={v} alFicha={setFicha} alResultado={setResultado} alPresentar={setPresenta} irTab={irTab} />}
-          {tabActual === "cuadro" && <CuadroTab v={v} alResultado={setResultado} alPresentar={setPresenta} />}
-          {tabActual === "partidos" && <PartidosTab v={v} alResultado={setResultado} alPresentar={setPresenta} />}
+          {tabActual === "tabla" && <TablaTab v={v} alFicha={setFicha} alResultado={abrir} alPresentar={setPresenta} irTab={irTab} />}
+          {tabActual === "cuadro" && <CuadroTab v={v} alResultado={abrir} alPresentar={setPresenta} />}
+          {tabActual === "partidos" && <PartidosTab v={v} alResultado={abrir} alPresentar={setPresenta} />}
           {tabActual === "jugadores" && <JugadoresTab v={v} alFicha={setFicha} />}
           {tabActual === "ajustes" && <AjustesTab v={v} />}
         </section>
       </main>
 
       <Resultado liga={v} partidoId={resultado} alCerrar={() => setResultado(null)} alSiguiente={(x) => setResultado(x)} />
-      <Presentacion liga={v} partidoId={presenta} alCerrar={() => setPresenta(null)}
+      <Presentacion liga={v} partidoId={presenta} editable={editable} alCerrar={() => setPresenta(null)}
         alRegistrar={(x) => { setPresenta(null); setResultado(x); }} alOtro={setPresenta} />
       <AgregarJugadores liga={v} abierto={alta} alCerrar={() => setAlta(false)} />
       <CompartirModal liga={v} abierto={compartir} alCerrar={() => setCompartir(false)} />
-      <Ficha v={v} id={ficha} alCerrar={() => setFicha(null)} alResultado={(x) => { setFicha(null); setResultado(x); }} />
-    </>
+      <Ficha v={v} id={ficha} alCerrar={() => setFicha(null)} alResultado={(x) => { setFicha(null); abrir(x); }} />
+    </Editable.Provider>
   );
 }
 
@@ -137,6 +143,7 @@ function Encabezado({ v, alAlta, alRegistrar, alCompartir }: { v: m.Vista; alAlt
   const actual = rondaActual(v);
   const sets = v.partidos.reduce((t, p) => t + (p.marcador && !p.wo ? p.marcador[0] + p.marcador[1] : 0), 0);
   const Icono = Ic[v.config.formato];
+  const editable = useContext(Editable);
   return (
     <header className="encabezado">
       <div className="enc-info">
@@ -144,6 +151,7 @@ function Encabezado({ v, alAlta, alRegistrar, alCompartir }: { v: m.Vista; alAlt
           <span className="etq volt"><Icono size={14} /> {v.formato_nombre}</span>
           <span className="etq">Al mejor de {v.config.mejor_de}</span>
           <span className="etq">Sets a {v.config.puntos_set}</span>
+          {!editable && <span className="etq nube"><Ic.lock size={12} /> Solo lectura</span>}
           {v.campeon ? <span className="etq oro"><Ic.trophy size={14} /> Finalizada</span> : v.jugados > 0 && <span className="etq vivo"><i />En juego</span>}
         </div>
         <motion.h1 className="titular" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>{v.nombre}</motion.h1>
@@ -160,9 +168,9 @@ function Encabezado({ v, alAlta, alRegistrar, alCompartir }: { v: m.Vista; alAlt
         <div><b>{sets}</b><span>Sets</span></div>
       </div>
       <div className="enc-acciones">
-        <button className="btn" onClick={alAlta}><Ic.user /> Jugador <kbd>J</kbd></button>
-        <button className="btn" onClick={alCompartir} disabled={!v.generado}><Ic.share /> Compartir <kbd>S</kbd></button>
-        <button className="btn btn-primary" onClick={alRegistrar}><Ic.score /> Resultado <kbd>R</kbd></button>
+        {editable && <button className="btn" onClick={alAlta}><Ic.user /> Jugador <kbd>J</kbd></button>}
+        <button className={`btn ${editable ? "" : "btn-primary"}`} onClick={alCompartir} disabled={!v.generado}><Ic.share /> Compartir <kbd>S</kbd></button>
+        {editable && <button className="btn btn-primary" onClick={alRegistrar}><Ic.score /> Resultado <kbd>R</kbd></button>}
       </div>
     </header>
   );
@@ -171,6 +179,7 @@ function Encabezado({ v, alAlta, alRegistrar, alCompartir }: { v: m.Vista; alAlt
 /** La mesa principal: el próximo partido se juega aquí. */
 function Escenario({ v, alPresentar, alRegistrar, alAlta }: { v: m.Vista; alPresentar: (id: string) => void; alRegistrar: (id: string) => void; alAlta: () => void }) {
   const prox = siguientePendiente(v);
+  const editable = useContext(Editable);
   const fila = (id: string | null) => v.tabla.find((f) => f.id === id);
   const esKO = v.config.formato === "ko";
   const detalle = (id: string | null) => {
@@ -196,7 +205,7 @@ function Escenario({ v, alPresentar, alRegistrar, alAlta }: { v: m.Vista; alPres
           <div className="esc-vacio">
             <span className="eyebrow">{v.generado ? "Ronda completa" : "La mesa está lista"}</span>
             <b>{v.generado ? "Genera la siguiente ronda" : v.jugadores.length < 2 ? "Faltan jugadores" : "Genera el calendario"}</b>
-            {!v.generado && <button className="btn btn-primary" onClick={alAlta}><Ic.user /> Sumar jugadores</button>}
+            {!v.generado && editable && <button className="btn btn-primary" onClick={alAlta}><Ic.user /> Sumar jugadores</button>}
           </div>} />
       </section>
     );
@@ -209,7 +218,7 @@ function Escenario({ v, alPresentar, alRegistrar, alAlta }: { v: m.Vista; alPres
         centro={<div className={`esc-bug ${prox.fase === "final" ? "oro" : ""}`}><span>{prox.fase === "final" ? "Por el título" : "Próximo partido"}</span><b>{m.etiquetaPartido(v, prox)}</b></div>} />
       <div className="esc-acciones">
         <button className="btn btn-volt" onClick={() => alPresentar(prox.id)}><Ic.play size={16} /> Presentar <kbd>P</kbd></button>
-        <button className="btn" onClick={() => alRegistrar(prox.id)}><Ic.score /> Registrar resultado</button>
+        {editable && <button className="btn" onClick={() => alRegistrar(prox.id)}><Ic.score /> Registrar resultado</button>}
       </div>
     </section>
   );
@@ -280,6 +289,7 @@ function TablaTab({ v, alFicha, alResultado, alPresentar, irTab }: { v: m.Vista;
 /** Camino a la gran final: aviso de empates durante la liga y partidos de la fase final al cerrarla. */
 function FaseFinalPanel({ v, alResultado, alPresentar }: { v: m.Vista; alResultado: (id: string) => void; alPresentar: (id: string) => void }) {
   const ff = v.fase_final;
+  const editable = useContext(Editable);
   const nombres = (ids: string[]) => {
     const n = ids.map((i) => nombreDe(v, i)!);
     return n.length > 1 ? `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}` : n[0];
@@ -323,7 +333,7 @@ function FaseFinalPanel({ v, alResultado, alPresentar }: { v: m.Vista; alResulta
               </button>
               {!p.marcador && <div className="partido-pie"><span className="spacer" />
                 <button className="btn btn-ghost btn-xs" onClick={() => alPresentar(p.id)}><Ic.play size={14} /> Presentar</button>
-                <button className="btn btn-ghost btn-xs volt-txt" onClick={() => alResultado(p.id)}>Registrar <Ic.arrow size={14} /></button></div>}
+                {editable && <button className="btn btn-ghost btn-xs volt-txt" onClick={() => alResultado(p.id)}>Registrar <Ic.arrow size={14} /></button>}</div>}
             </div>
           );
         })}
@@ -339,6 +349,8 @@ function FaseFinalPanel({ v, alResultado, alPresentar }: { v: m.Vista; alResulta
 
 function BannerSuizo({ v }: { v: m.Vista }) {
   const editar = useLigas((s) => s.editar);
+  const editable = useContext(Editable);
+  if (!editable) return null;
   const n = Math.max(0, ...v.partidos.map((p) => p.ronda + 1)) + 1;
   return (
     <div className="banner"><Ic.info /><span>Ronda completa. Empareja la siguiente según la tabla actual.</span><span className="spacer" />
@@ -348,13 +360,14 @@ function BannerSuizo({ v }: { v: m.Vista }) {
 
 function SinCalendario({ v }: { v: m.Vista }) {
   const editar = useLigas((s) => s.editar);
+  const editable = useContext(Editable);
   const n = v.jugadores.length;
   return (
     <div className="vacio panel">
       <Ic.cal size={40} />
       <h3>{n < 2 ? "Faltan jugadores" : "Calendario sin generar"}</h3>
       <p>{n < 2 ? `Necesitas al menos 2 jugadores. Llevas ${n}.` : `Tienes ${n} jugadores listos.`}</p>
-      {n >= 2 && <button className="btn btn-primary" onClick={() => intentar(() => { editar(v.id, (l) => m.generarCalendario(l)); avisar("Partidos generados"); })}><Ic.bolt /> Generar partidos</button>}
+      {n >= 2 && editable && <button className="btn btn-primary" onClick={() => intentar(() => { editar(v.id, (l) => m.generarCalendario(l)); avisar("Partidos generados"); })}><Ic.bolt /> Generar partidos</button>}
     </div>
   );
 }
@@ -368,6 +381,7 @@ function TarjetaPartido({ v, p, alResultado, alPresentar }: { v: m.Vista; p: m.P
   }
   const g = m.ganador(p);
   const listo = !!(p.a && p.b);
+  const editable = useContext(Editable);
   return (
     <div className={`partido ${p.marcador ? "jugado" : ""} ${p.fase === "final" ? "es-final" : ""}`}>
       {p.fase && <span className="ff-etq">{m.etiquetaPartido(v, p)}</span>}
@@ -383,7 +397,7 @@ function TarjetaPartido({ v, p, alResultado, alPresentar }: { v: m.Vista; p: m.P
           : <span className="muted-text">{listo ? "Por jugar" : "Esperando rivales"}</span>}
         <span className="spacer" />
         {listo && <button className="btn btn-ghost btn-xs" onClick={() => alPresentar(p.id)} title="Presentar partido"><Ic.play size={14} /> Presentar</button>}
-        {listo && !p.marcador && <button className="btn btn-ghost btn-xs volt-txt" onClick={() => alResultado(p.id)}>Registrar <Ic.arrow size={14} /></button>}
+        {listo && !p.marcador && editable && <button className="btn btn-ghost btn-xs volt-txt" onClick={() => alResultado(p.id)}>Registrar <Ic.arrow size={14} /></button>}
       </div>
     </div>
   );
@@ -495,6 +509,7 @@ function JugadoresTab({ v, alFicha }: { v: m.Vista; alFicha: (id: string) => voi
   const [editando, setEditando] = useState<string | null>(null);
   const filas = Object.fromEntries(v.tabla.map((f) => [f.id, f]));
   const esKO = v.config.formato === "ko";
+  const editable = useContext(Editable);
 
   const quitar = async (j: m.Jugador) => {
     const jugados = v.partidos.filter((p) => p.marcador && (p.a === j.id || p.b === j.id)).length;
@@ -511,13 +526,13 @@ function JugadoresTab({ v, alFicha }: { v: m.Vista; alFicha: (id: string) => voi
 
   return (
     <>
-      <form className="alta-rapida" onSubmit={(e) => { e.preventDefault(); const n = m.limpiarNombres([texto]); if (n.length && sumarJugadores(v, n)) setTexto(""); }}>
+      {editable && <><form className="alta-rapida" onSubmit={(e) => { e.preventDefault(); const n = m.limpiarNombres([texto]); if (n.length && sumarJugadores(v, n)) setTexto(""); }}>
         <Ic.user size={22} />
         <input value={texto} onChange={(e) => setTexto(e.target.value)} autoFocus aria-label="Nombre del jugador"
           placeholder="Escribe un nombre y pulsa Enter… (o pega varios separados por coma)" />
         <button className="btn btn-primary" type="submit"><Ic.plus /><span className="hide-sm">Agregar</span></button>
       </form>
-      <p className="pista">{avisoAltas(v)}</p>
+      <p className="pista">{avisoAltas(v)}</p></>}
       {v.jugadores.length ? (
         <div className="jugadores">
           {v.jugadores.map((j, i) => {
@@ -534,10 +549,10 @@ function JugadoresTab({ v, alFicha }: { v: m.Vista; alFicha: (id: string) => voi
                     : <button className="jcard-nombre tocable" onClick={() => alFicha(j.id)}>{j.nombre}</button>}
                   <span className="muted-text">{f?.pj ? `${f.g}G · ${f.p}P${esKO ? "" : ` · ${f.pts} pts`}` : "Sin partidos jugados"}</span>
                 </div>
-                <div className="jcard-acc">
+                {editable && <div className="jcard-acc">
                   <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setEditando(j.id)} aria-label={`Renombrar a ${j.nombre}`}><Ic.edit /></button>
                   <button className="btn btn-ghost btn-icon btn-sm btn-danger" onClick={() => quitar(j)} aria-label={`Eliminar a ${j.nombre}`}><Ic.trash /></button>
-                </div>
+                </div>}
               </motion.div>
             );
           })}
