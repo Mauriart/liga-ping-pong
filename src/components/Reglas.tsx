@@ -114,7 +114,20 @@ export function Reglas({ cfg, alCambiar }: { cfg: m.Config; alCambiar: Cambio })
         </div>
       </div>
 
-      <div className="tarjeta ancho-total">
+      {m.esLiga(cfg) && (
+        <div className="tarjeta ancho-total">
+          <h4><Ic.trophy /> Cómo se define el campeón</h4>
+          <div className="fila-regla">
+            <div><b>{cfg.cierre === "gran_final" ? "Gran final 1 vs 2" : "Tabla con criterios"}</b>
+              <small>{cfg.cierre === "gran_final"
+                ? "Empate en puntos = mismo puesto. Al cerrar la fase regular se juega la gran final; si hay empate por la final o por el 3.º, se desempata en la mesa."
+                : "La tabla ordena con los criterios de desempate y el líder al final es el campeón."}</small></div>
+            <Seg etiqueta="Cómo se define el campeón" opciones={[["gran_final", "Gran final"], ["tabla", "Tabla"]]} valor={cfg.cierre} alCambiar={(v) => alCambiar({ cierre: v })} />
+          </div>
+        </div>
+      )}
+
+      {!m.conGranFinal(cfg) && <div className="tarjeta ancho-total">
         <h4><Ic.table /> Orden de desempate</h4>
         <ol className="desempate">
           {cfg.desempate.map((c, i) => (
@@ -130,7 +143,7 @@ export function Reglas({ cfg, alCambiar }: { cfg: m.Config; alCambiar: Cambio })
             </li>
           ))}
         </ol>
-      </div>
+      </div>}
     </div>
   );
 }

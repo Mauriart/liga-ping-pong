@@ -103,7 +103,7 @@ describe("tabla", () => {
   });
 
   it("empate triple: mini liga igualada, decide diferencia de sets", () => {
-    const l = ligaCon(3, { formato: "rr1", desempate: ["puntos", "h2h", "dif_sets"] });
+    const l = ligaCon(3, { formato: "rr1", cierre: "tabla", desempate: ["puntos", "h2h", "dif_sets"] });
     const [a, b, c] = ids(l);
     marcar(l, a, b, [3, 2]); marcar(l, b, c, [3, 0]); marcar(l, c, a, [3, 0]);
     expect(m.tabla(l)[0].id).toBe(b);
@@ -158,5 +158,124 @@ describe("altas, bajas y cuadro", () => {
     delete copia.config.desempate;
     expect(m.validarImportada(copia).config.desempate).toEqual(m.CONFIG_DEFECTO.desempate);
     expect(() => m.validarImportada({ nombre: "x" })).toThrow(m.ErrorLiga);
+  });
+});
+
+describe("gran final: empates en la mesa", () => {
+  /** Liga solo ida donde `gana(x, y)` dice si x le gana a y (por nombre). */
+  const liga = (nombres: string[], gana: (x: string, y: string) => boolean) => {
+    const l = m.nuevaLiga("Final", { formato: "rr1" }, nombres);
+    m.generarCalendario(l);
+    const nombre = (id: string | null) => l.jugadores.find((j) => j.id === id)!.nombre;
+    for (const p of l.partidos.filter((x) => !x.fase)) {
+      m.registrarResultado(l, p.id, { marcador: gana(nombre(p.a), nombre(p.b)) ? [3, 1] : [1, 3] });
+    }
+    return l;
+  };
+  const id = (l: m.Liga, n: string) => l.jugadores.find((j) => j.nombre === n)!.id;
+  const nombre = (l: m.Liga, i: string | null) => l.jugadores.find((j) => j.id === i)?.nombre;
+  const fase = (l: m.Liga, f: m.Fase) => l.partidos.filter((p) => p.fase === f);
+  const jugar = (l: m.Liga, p: m.Partido, ganadorNombre: string) =>
+    m.registrarResultado(l, p.id, { marcador: nombre(l, p.a) === ganadorNombre ? [3, 0] : [0, 3] });
+  const orden = ["A", "B", "C", "D", "E"];
+  const porOrden = (x: string, y: string) => orden.indexOf(x) < orden.indexOf(y);
+
+  it("es la regla por defecto en todos contra todos", () => {
+    expect(m.CONFIG_DEFECTO.cierre).toBe("gran_final");
+    expect(m.conGranFinal({ ...m.CONFIG_DEFECTO, formato: "ko" })).toBe(false);
+  });
+
+  it("empate en puntos comparte puesto, sin superioridad por criterios", () => {
+    // B, C y D se ganan en círculo: los tres suman 3 puntos
+    const ciclo: Record<string, string> = { B: "C", C: "D", D: "B" };
+    const l = liga(["A", "B", "C", "D"], (x, y) => x === "A" || (y !== "A" && ciclo[x] === y));
+    const t = m.tabla(l);
+    expect(t.map((f) => f.pos)).toEqual([1, 2, 2, 2]);
+    expect(t.filter((f) => f.empatado).map((f) => f.nombre).sort()).toEqual(["B", "C", "D"]);
+  });
+
+  it("no hay fase final hasta terminar la fase regular", () => {
+    const l = m.nuevaLiga("X", { formato: "rr1" }, ["A", "B", "C"]);
+    m.generarCalendario(l);
+    m.registrarResultado(l, l.partidos[0].id, { marcador: [3, 0] });
+    expect(l.partidos.some((p) => p.fase)).toBe(false);
+    expect(m.vista(l).campeon).toBeNull();
+  });
+
+  it("sin empates: gran final 1 vs 2 y el 3.º queda directo", () => {
+    const l = liga(["A", "B", "C", "D"], porOrden);
+    expect(fase(l, "desempate")).toHaveLength(0);
+    expect(fase(l, "tercero")).toHaveLength(0);
+    const [final] = fase(l, "final");
+    expect([final.a, final.b]).toEqual([id(l, "A"), id(l, "B")]);
+    expect(m.faseFinal(l).tercero).toBe(id(l, "C"));
+    expect(m.vista(l).campeon).toBeNull();
+    jugar(l, final, "B");
+    const v = m.vista(l);
+    expect(v.campeon).toBe(id(l, "B"));
+    expect(v.fase_final!.subcampeon).toBe(id(l, "A"));
+  });
+
+  it("empate por el 2.º: desempate en la mesa, luego la final; el que cae al final queda 3.º", () => {
+    const ciclo: Record<string, string> = { B: "C", C: "D", D: "B" };
+    const l = liga(["A", "B", "C", "D"], (x, y) => x === "A" || (y !== "A" && ciclo[x] === y));
+    expect(m.faseFinal(l).empateFinal.map((x) => nombre(l, x)).sort()).toEqual(["B", "C", "D"]);
+    expect(fase(l, "final")).toHaveLength(0);
+    // 3 empatados por 1 plaza: dos rondas de desempate
+    const r1 = fase(l, "desempate");
+    expect(r1).toHaveLength(1);
+    jugar(l, r1[0], nombre(l, r1[0].a)!);
+    const r2 = fase(l, "desempate").filter((p) => !p.marcador);
+    expect(r2).toHaveLength(1);
+    jugar(l, r2[0], nombre(l, r2[0].b)!);
+    const [final] = fase(l, "final");
+    expect(final.a).toBe(id(l, "A"));
+    expect(final.b).toBe(r2[0].b);
+    expect(m.faseFinal(l).tercero).toBe(r2[0].a);
+    expect(fase(l, "tercero")).toHaveLength(0);
+  });
+
+  it("triple empate arriba: un desempate por las dos plazas y el que cae es 3.º", () => {
+    const ciclo: Record<string, string> = { A: "B", B: "C", C: "A" };
+    const l = liga(["A", "B", "C", "D"], (x, y) => y === "D" || (x !== "D" && ciclo[x] === y));
+    expect(m.tabla(l).map((f) => f.pos)).toEqual([1, 1, 1, 4]);
+    const [d] = fase(l, "desempate");
+    jugar(l, d, nombre(l, d.a)!);
+    const [final] = fase(l, "final");
+    const tres = ["A", "B", "C"].map((n) => id(l, n));
+    expect([final.a, final.b].every((x) => tres.includes(x!) && x !== d.b)).toBe(true);
+    expect(m.faseFinal(l).tercero).toBe(d.b);
+  });
+
+  it("empate por el 3.º: partido por el 3.er puesto en paralelo a la gran final", () => {
+    const ciclo: Record<string, string> = { C: "D", D: "E", E: "C" };
+    const l = liga(["A", "B", "C", "D", "E"], (x, y) =>
+      x === "A" || (x === "B" && y !== "A") || (!["A", "B"].includes(x) && !["A", "B"].includes(y) && ciclo[x] === y));
+    expect(fase(l, "final")).toHaveLength(1);
+    expect(m.faseFinal(l).empateTercero.map((x) => nombre(l, x)).sort()).toEqual(["C", "D", "E"]);
+    const t1 = fase(l, "tercero");
+    expect(t1).toHaveLength(1);
+    jugar(l, t1[0], nombre(l, t1[0].a)!);
+    const t2 = fase(l, "tercero").filter((p) => !p.marcador);
+    jugar(l, t2[0], nombre(l, t2[0].a)!);
+    expect(m.faseFinal(l).tercero).toBe(t2[0].a);
+  });
+
+  it("cambiar un resultado regular rehace la fase final", () => {
+    const l = liga(["A", "B", "C"], porOrden);
+    const [final] = fase(l, "final");
+    jugar(l, final, "A");
+    const regular = l.partidos.find((p) => !p.fase)!;
+    m.borrarResultado(l, regular.id);
+    expect(l.partidos.some((p) => p.fase)).toBe(false);
+    expect(m.vista(l).campeon).toBeNull();
+  });
+
+  it("con cierre por tabla no hay gran final y el líder es campeón", () => {
+    const l = m.nuevaLiga("T", { formato: "rr1", cierre: "tabla" }, ["A", "B", "C"]);
+    m.generarCalendario(l);
+    l.partidos.forEach((p) => m.registrarResultado(l, p.id, { marcador: [3, 0] }));
+    expect(l.partidos.some((p) => p.fase)).toBe(false);
+    expect(m.vista(l).campeon).toBe(m.tabla(l)[0].id);
   });
 });

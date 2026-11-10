@@ -679,3 +679,32 @@ td .pos, span.pos { color: var(--gana); } span.neg { color: var(--pierde); }
   .enc-acciones .btn { flex: 1; }
   .modal-head h2 { font-size: 23px; }
 }
+
+/* ---------- empates y fase final ---------- */
+sup.emp, b.emp { font: 900 13px var(--display); color: var(--volt-txt); margin-left: 2px; font-style: normal; }
+.camino { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: 12px; background: var(--s1); border: 1px dashed var(--linea-2); }
+.camino svg { color: var(--oro); flex-shrink: 0; margin-top: 2px; }
+.camino div { display: flex; flex-direction: column; gap: 2px; }
+.camino b { font: italic 900 17px var(--display); font-stretch: 80%; text-transform: uppercase; }
+.camino span { color: var(--suave); font-size: 13.5px; }
+.fase-final { display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: var(--r); border: 1px solid rgba(246,196,69,.4);
+  background: radial-gradient(80% 120% at 100% 0%, rgba(246,196,69,.12), transparent 60%), var(--s1); }
+.ff-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ff-partidos { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.ff-partido, .partido { position: relative; }
+.ff-etq { align-self: flex-start; font: 800 10.5px var(--display); letter-spacing: .14em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; background: var(--s3); color: var(--texto); }
+.ff-partido { display: flex; flex-direction: column; gap: 8px; }
+.es-final .ff-etq { background: var(--oro); color: #000; }
+.es-final .minimesa { box-shadow: inset 0 0 0 3px var(--oro), 0 14px 30px -14px rgba(246,196,69,.6); }
+.podio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.podio-puesto { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; background: var(--s2); border-left: 4px solid var(--linea-2); min-width: 0; }
+.podio-puesto span { font: 800 10.5px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--suave); }
+.podio-puesto b { font: italic 900 22px/1.05 var(--display); font-stretch: 78%; text-transform: uppercase; overflow-wrap: anywhere; }
+.podio-puesto.oro { border-left-color: var(--oro); } .podio-puesto.plata { border-left-color: var(--plata); } .podio-puesto.bronce { border-left-color: var(--bronce); }
+.podio-puesto.vacio-p b { color: var(--suave-2); font-style: italic; font-weight: 600; text-transform: none; font-size: 16px; }
+.esc-bug.oro { border-top-color: var(--oro); }
+.esc-bug.oro span { color: var(--oro); }
+.walk.es-final .walk-vs { color: var(--oro); text-shadow: 0 10px 40px rgba(0,0,0,.6), 0 0 50px rgba(246,196,69,.45); }
+.walk.es-final .walk-top .eyebrow { color: var(--oro); }
+.g-etq { color: var(--oro) !important; font: 800 11px var(--display) !important; letter-spacing: .1em; text-transform: uppercase; }
+@media (max-width: 560px) { .podio { grid-template-columns: 1fr; } .ff-partidos { grid-template-columns: 1fr; } }

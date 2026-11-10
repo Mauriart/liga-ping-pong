@@ -44,14 +44,14 @@ export function Inicio({ alNueva }: { alNueva: () => void }) {
             {ligas.map((l, i) => {
               const v = m.vista(l);
               const pct = v.total_partidos ? Math.round((v.jugados / v.total_partidos) * 100) : 0;
-              const lider = v.campeon ? v.tabla.find((f) => f.id === v.campeon) : v.jugados ? v.tabla[0] : undefined;
+              const lideres = v.campeon ? v.tabla.filter((f) => f.id === v.campeon) : v.jugados ? v.tabla.filter((f) => f.pos === 1) : [];
               return (
                 <motion.button key={l.id} className="lcard tocable" onClick={() => ir(`#/liga/${l.id}`)}
                   initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                   <span className="lcard-mesa" aria-hidden="true"><i /></span>
                   <span className="etq">{v.formato_nombre}</span>
                   <b className="lcard-nombre">{l.nombre}</b>
-                  <span className="lcard-lider">{lider ? <>{v.campeon ? "🏆 Campeón" : "Líder"}: <b>{lider.nombre}</b></> : "Sin resultados aún"}</span>
+                  <span className="lcard-lider">{lideres.length ? <>{v.campeon ? "🏆 Campeón" : lideres.length > 1 ? "Líderes" : "Líder"}: <b>{lideres.map((f) => f.nombre).join(", ")}</b></> : "Sin resultados aún"}</span>
                   <div className="barra"><i style={{ width: `${pct}%` }} /></div>
                   <span className="lcard-pie"><span>{plural(l.jugadores.length, "jugador", "jugadores")}</span><span>{v.jugados}/{v.total_partidos} partidos</span></span>
                 </motion.button>

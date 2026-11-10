@@ -103,7 +103,7 @@ function Contenido({ liga, pid, alCerrar, alSiguiente }: { liga: m.Vista; pid: s
       if (e.key === "Enter" && !(e.target as HTMLElement).closest("button") && estado.listo) { e.preventDefault(); enviar(datos(), e.shiftKey && quedan); }
     }}>
       <div className="modal-head">
-        <div className="col"><span className="eyebrow">{liga.nombres_ronda[p.ronda]} · al mejor de {cfg.mejor_de} · sets a {cfg.puntos_set}</span><h2>Resultado</h2></div>
+        <div className="col"><span className="eyebrow">{m.etiquetaPartido(liga, p)} · al mejor de {cfg.mejor_de} · sets a {cfg.puntos_set}</span><h2>Resultado</h2></div>
         <span className="spacer" />
         <Seg etiqueta="Modo de carga" opciones={[["detallado", "Por set"], ["sets", "Solo sets"]]} valor={modo} alCambiar={setModo} />
         <button className="btn btn-ghost btn-icon" onClick={alCerrar} aria-label="Cerrar"><Ic.x /></button>

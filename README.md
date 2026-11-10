@@ -27,6 +27,7 @@ Otros comandos:
 - **Presentación del partido** (`P`): entrada tipo transmisión con la mesa al centro, los dos jugadores con sus números, historial y «VS». Desde ahí se registra el resultado.
 - **Alta rápida** (`J`): Enter para sumar, o pega una lista separada por comas o renglones.
 - **Formatos**: todos contra todos ida y vuelta (por defecto), solo ida, eliminación directa con cuadro y sistema suizo.
+- **Gran final** (por defecto en «todos contra todos»): empate en puntos = mismo puesto, sin criterios que pongan a uno sobre otro. Al cerrar la fase regular se juega la gran final 1.º vs 2.º; si hay empate por la final se desempata en la mesa, y si hay empate por el 3.er puesto se juega el partido por el tercero. Se puede cambiar a «Tabla» (criterios de desempate) en Ajustes.
 - **Reglas propias**: al mejor de 1/3/5/7, sets a 11, 21 u otro; puntos por victoria, derrota y W.O.; bonus por barrida y por derrota ajustada; orden de desempate (incluye enfrentamiento directo).
 - **Resultados** (`R`): set por set con validación en vivo o solo el marcador de sets; «Guardar y siguiente» encadena los pendientes.
 - **Compartir la tabla** (`S`): enlace de solo lectura que lleva la tabla dentro (sin servidor), imagen PNG para el chat y botón de compartir del celular.

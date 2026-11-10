@@ -85,7 +85,7 @@ export function LigaView({ id, tab }: { id: string; tab: string }) {
         </nav>
 
         <section className="pestana" key={tabActual}>
-          {tabActual === "tabla" && <TablaTab v={v} alFicha={setFicha} alResultado={setResultado} irTab={irTab} />}
+          {tabActual === "tabla" && <TablaTab v={v} alFicha={setFicha} alResultado={setResultado} alPresentar={setPresenta} irTab={irTab} />}
           {tabActual === "cuadro" && <CuadroTab v={v} alResultado={setResultado} alPresentar={setPresenta} />}
           {tabActual === "partidos" && <PartidosTab v={v} alResultado={setResultado} alPresentar={setPresenta} />}
           {tabActual === "jugadores" && <JugadoresTab v={v} alFicha={setFicha} />}
@@ -114,7 +114,7 @@ function Ticker({ v }: { v: m.Vista }) {
     const g = m.ganador(p);
     return (
       <span className="tick" key={k}>
-        <em>{v.nombres_ronda[p.ronda]}</em>
+        <em>{m.etiquetaPartido(v, p)}</em>
         <span className={g === "a" ? "w" : ""}>{nombreDe(v, p.a)}</span>
         <b>{p.marcador![0]}–{p.marcador![1]}</b>
         <span className={g === "b" ? "w" : ""}>{nombreDe(v, p.b)}</span>
@@ -206,7 +206,7 @@ function Escenario({ v, alPresentar, alRegistrar, alAlta }: { v: m.Vista; alPres
       <Mesa3D
         izquierda={<Placa lado="izq" nombre={nombreDe(v, prox.a)} detalle={detalle(prox.a)} />}
         derecha={<Placa lado="der" nombre={nombreDe(v, prox.b)} detalle={detalle(prox.b)} />}
-        centro={<div className="esc-bug"><span>Próximo partido</span><b>{v.nombres_ronda[prox.ronda]}</b></div>} />
+        centro={<div className={`esc-bug ${prox.fase === "final" ? "oro" : ""}`}><span>{prox.fase === "final" ? "Por el título" : "Próximo partido"}</span><b>{m.etiquetaPartido(v, prox)}</b></div>} />
       <div className="esc-acciones">
         <button className="btn btn-volt" onClick={() => alPresentar(prox.id)}><Ic.play size={16} /> Presentar <kbd>P</kbd></button>
         <button className="btn" onClick={() => alRegistrar(prox.id)}><Ic.score /> Registrar resultado</button>
@@ -221,13 +221,14 @@ function Racha({ r }: { r: ("G" | "P")[] }) {
 }
 const dif = (n: number) => <span className={n > 0 ? "pos" : n < 0 ? "neg" : ""}>{n > 0 ? "+" : ""}{n}</span>;
 
-function TablaTab({ v, alFicha, alResultado, irTab }: { v: m.Vista; alFicha: (id: string) => void; alResultado: (id: string) => void; irTab: (t: string) => void }) {
+function TablaTab({ v, alFicha, alResultado, alPresentar, irTab }: { v: m.Vista; alFicha: (id: string) => void; alResultado: (id: string) => void; alPresentar: (id: string) => void; irTab: (t: string) => void }) {
   if (!v.generado) return <SinCalendario v={v} />;
   const ultimos = v.partidos.filter((p) => p.marcador).sort((a, b) => (b.jugado ?? "").localeCompare(a.jugado ?? "")).slice(0, 6);
   return (
     <div className="grid-tabla">
       <div className="stack">
         {v.config.formato === "suizo" && v.puede_avanzar && <BannerSuizo v={v} />}
+        {m.conGranFinal(v.config) && <FaseFinalPanel v={v} alResultado={alResultado} alPresentar={alPresentar} />}
         <div className="panel desliza">
           <table className="tabla">
             <thead><tr>
@@ -239,7 +240,7 @@ function TablaTab({ v, alFicha, alResultado, irTab }: { v: m.Vista; alFicha: (id
             <tbody>
               {v.tabla.map((f) => (
                 <motion.tr key={f.id} layout className={`p${f.pos} tocable`} onClick={() => alFicha(f.id)}>
-                  <td className="pos"><b>{f.pos}</b>{f.mov !== undefined && <small className={f.mov > 0 ? "sube" : f.mov < 0 ? "baja" : "igual"}>{f.mov > 0 ? `▲${f.mov}` : f.mov < 0 ? `▼${-f.mov}` : "="}</small>}</td>
+                  <td className="pos" title={f.empatado ? "Empatado en puntos: comparten puesto" : undefined}><b>{f.pos}{f.empatado && <sup className="emp">=</sup>}</b>{f.mov !== undefined && <small className={f.mov > 0 ? "sube" : f.mov < 0 ? "baja" : "igual"}>{f.mov > 0 ? `▲${f.mov}` : f.mov < 0 ? `▼${-f.mov}` : "="}</small>}</td>
                   <td className="izq"><span className="jug"><Avatar nombre={f.nombre} /><span>{f.nombre}</span>{v.campeon === f.id && <Ic.trophy size={15} className="oro" />}</span></td>
                   <td>{f.pj}</td><td>{f.g}</td><td>{f.p}</td>
                   <td className="hide-sm">{f.sf}</td><td className="hide-sm">{f.sc}</td><td>{dif(f.ds)}</td>
@@ -252,7 +253,9 @@ function TablaTab({ v, alFicha, alResultado, irTab }: { v: m.Vista; alFicha: (id
           <div className="leyenda">
             <span><i className="oro" />1.º</span><span><i className="plata" />2.º</span><span><i className="bronce" />3.º</span>
             <span>Victoria {v.config.pts_victoria} · Derrota {v.config.pts_derrota}{v.config.bonus_barrida ? ` · Barrida +${v.config.bonus_barrida}` : ""}{v.config.bonus_derrota_ajustada ? ` · Ajustada +${v.config.bonus_derrota_ajustada}` : ""}</span>
-            <span>Desempate: {v.config.desempate.map((c) => m.CRITERIOS[c]).join(" › ")}</span>
+            {m.conGranFinal(v.config)
+              ? <span><b className="emp">=</b> Empatados en puntos comparten puesto · el campeón sale de la gran final</span>
+              : <span>Desempate: {v.config.desempate.map((c) => m.CRITERIOS[c]).join(" › ")}</span>}
           </div>
         </div>
       </div>
@@ -263,13 +266,73 @@ function TablaTab({ v, alFicha, alResultado, irTab }: { v: m.Vista; alFicha: (id
             const g = m.ganador(p);
             return (
               <button key={p.id} className="titular-res tocable" onClick={() => alResultado(p.id)}>
-                <span className="tr-meta">{v.nombres_ronda[p.ronda]} · {haceCuanto(p.jugado)}</span>
+                <span className="tr-meta">{m.etiquetaPartido(v, p)} · {haceCuanto(p.jugado)}</span>
                 <span className="tr-linea"><span className={g === "a" ? "w" : ""}>{nombreDe(v, p.a)}</span><b>{p.marcador![0]}–{p.marcador![1]}</b><span className={g === "b" ? "w" : ""}>{nombreDe(v, p.b)}</span></span>
               </button>
             );
           }) : <p className="muted-text">Aún no hay resultados. El primero aparece aquí.</p>}
         </div>
       </aside>
+    </div>
+  );
+}
+
+/** Camino a la gran final: aviso de empates durante la liga y partidos de la fase final al cerrarla. */
+function FaseFinalPanel({ v, alResultado, alPresentar }: { v: m.Vista; alResultado: (id: string) => void; alPresentar: (id: string) => void }) {
+  const ff = v.fase_final;
+  const nombres = (ids: string[]) => {
+    const n = ids.map((i) => nombreDe(v, i)!);
+    return n.length > 1 ? `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}` : n[0];
+  };
+  if (!ff?.activa) {
+    // durante la liga: avisar si hoy hay empate en los puestos que cuentan
+    const avisos: string[] = [];
+    for (const puesto of [1, 2, 3]) {
+      const g = v.tabla.filter((f) => f.pos === puesto && f.empatado);
+      if (g.length > 1 && !(puesto === 1 && g.length === 2)) avisos.push(`${puesto}.º: ${nombres(g.map((f) => f.id))}`);
+    }
+    return (
+      <div className="camino">
+        <Ic.trophy size={20} />
+        <div><b>Camino a la gran final</b>
+          <span>Al cerrar la fase regular: 1.º vs 2.º por el título{avisos.length ? `. Hoy hay empate en el ${avisos.join(" · ")} — se definiría en la mesa.` : "; si hay empate por la final o por el 3.º, se desempata en la mesa."}</span></div>
+      </div>
+    );
+  }
+  const partidos = v.partidos.filter((p) => p.fase).sort((a, b) => a.orden - b.orden);
+  const campeon = v.campeon;
+  const podio: [string, string | null, string][] = [
+    ["Campeón", campeon, "oro"], ["Subcampeón", ff.subcampeon, "plata"], ["3.er puesto", ff.tercero, "bronce"],
+  ];
+  return (
+    <div className="fase-final">
+      <div className="ff-cab">
+        <span className="etq volt"><Ic.trophy size={14} /> Fase final</span>
+        {ff.empateFinal.length > 0 && <span className="muted-text">Empate por la final: {nombres(ff.empateFinal)}</span>}
+        {ff.empateTercero.length > 0 && <span className="muted-text">Empate por el 3.º: {nombres(ff.empateTercero)}</span>}
+      </div>
+      <div className="ff-partidos">
+        {partidos.map((p) => {
+          const g = m.ganador(p);
+          return (
+            <div key={p.id} className={`ff-partido ${p.fase === "final" ? "es-final" : ""}`}>
+              <span className="ff-etq">{m.etiquetaPartido(v, p)}</span>
+              <button className="partido-mesa tocable" onClick={() => alResultado(p.id)}>
+                <MiniMesa a={nombreDe(v, p.a)} b={nombreDe(v, p.b)} ganador={g}
+                  centro={p.marcador ? <span className="mm-bug"><b className={g === "a" ? "w" : ""}>{p.marcador[0]}</b><i>-</i><b className={g === "b" ? "w" : ""}>{p.marcador[1]}</b></span> : <span className="mm-bug vs">VS</span>} />
+              </button>
+              {!p.marcador && <div className="partido-pie"><span className="spacer" />
+                <button className="btn btn-ghost btn-xs" onClick={() => alPresentar(p.id)}><Ic.play size={14} /> Presentar</button>
+                <button className="btn btn-ghost btn-xs volt-txt" onClick={() => alResultado(p.id)}>Registrar <Ic.arrow size={14} /></button></div>}
+            </div>
+          );
+        })}
+      </div>
+      <div className="podio">
+        {podio.map(([t, id, c]) => (
+          <div key={t} className={`podio-puesto ${c} ${id ? "" : "vacio-p"}`}><span>{t}</span><b>{id ? nombreDe(v, id) : "Por definir"}</b></div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -306,7 +369,8 @@ function TarjetaPartido({ v, p, alResultado, alPresentar }: { v: m.Vista; p: m.P
   const g = m.ganador(p);
   const listo = !!(p.a && p.b);
   return (
-    <div className={`partido ${p.marcador ? "jugado" : ""}`}>
+    <div className={`partido ${p.marcador ? "jugado" : ""} ${p.fase === "final" ? "es-final" : ""}`}>
+      {p.fase && <span className="ff-etq">{m.etiquetaPartido(v, p)}</span>}
       <button className="partido-mesa tocable" disabled={!listo} onClick={() => alResultado(p.id)} aria-label={`${nombreDe(v, p.a) ?? "Por definir"} contra ${nombreDe(v, p.b) ?? "Por definir"}`}>
         <MiniMesa a={nombreDe(v, p.a)} b={nombreDe(v, p.b)} ganador={g} apagada={!listo}
           centro={p.marcador
@@ -563,7 +627,7 @@ function Ficha({ v, id, alCerrar, alResultado }: { v: m.Vista; id: string | null
                 return (
                   <button key={p.id} className="partido-mesa tocable" disabled={!p.a || !p.b} onClick={() => alResultado(p.id)}>
                     <MiniMesa a={nombreDe(v, p.a)} b={nombreDe(v, p.b)} ganador={g}
-                      centro={p.marcador ? <span className="mm-bug"><b className={g === "a" ? "w" : ""}>{p.marcador[0]}</b><i>-</i><b className={g === "b" ? "w" : ""}>{p.marcador[1]}</b></span> : <span className="mm-bug vs">{v.nombres_ronda[p.ronda]}</span>} />
+                      centro={p.marcador ? <span className="mm-bug"><b className={g === "a" ? "w" : ""}>{p.marcador[0]}</b><i>-</i><b className={g === "b" ? "w" : ""}>{p.marcador[1]}</b></span> : <span className="mm-bug vs">{m.etiquetaPartido(v, p)}</span>} />
                   </button>
                 );
               })}

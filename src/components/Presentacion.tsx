@@ -64,12 +64,12 @@ function Escena({ liga, p, siguiente, alCerrar, alRegistrar, alOtro }: {
   };
 
   return (
-    <motion.div className="walk" role="dialog" aria-modal="true" aria-label="Presentación del partido"
+    <motion.div className={`walk ${p.fase === "final" ? "es-final" : ""}`} role="dialog" aria-modal="true" aria-label="Presentación del partido"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <motion.div className="walk-barrido" initial={{ x: "-110%" }} animate={{ x: "110%" }} transition={{ duration: 0.9, ease: [0.7, 0, 0.3, 1] }} />
       <div className="walk-top">
         <motion.span className="eyebrow" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          {liga.nombre} · {liga.nombres_ronda[p.ronda]} · Partido {indice}
+          {liga.nombre} · {m.etiquetaPartido(liga, p)}{p.fase ? "" : ` · Partido ${indice}`}
         </motion.span>
         <button className="btn btn-ghost btn-icon" onClick={alCerrar} aria-label="Cerrar presentación"><Ic.x /></button>
       </div>

@@ -22,7 +22,16 @@ export interface Config {
   rondas_suizo: number;
   sorteo: boolean;
   desempate: Criterio[];
+  /**
+   * Cómo se define el campeón en «todos contra todos»:
+   * - gran_final: empate en puntos = mismo puesto; al cerrar la fase regular se juega
+   *   la gran final 1 vs 2, con desempates en la mesa si hay empate por la final o por el 3.º.
+   * - tabla: la tabla decide con los criterios de desempate y el líder es campeón.
+   */
+  cierre: "gran_final" | "tabla";
 }
+
+export type Fase = "desempate" | "final" | "tercero";
 
 export interface Jugador { id: string; nombre: string }
 
@@ -37,6 +46,10 @@ export interface Partido {
   wo: Lado | null;
   jugado: string | null;
   bye?: boolean;
+  /** Partidos de la fase final (no suman a la tabla). */
+  fase?: Fase;
+  /** Ronda dentro de su fase (desempates de varios jugadores). */
+  fr?: number;
 }
 
 export interface Liga {
@@ -55,10 +68,26 @@ export interface Fila {
   pj: number; g: number; p: number; sf: number; sc: number; pf: number; pc: number;
   pts: number; wo: number; descansos: number; racha: ("G" | "P")[];
   ds: number; dp: number; pos: number; mov?: number;
+  /** Comparte el puesto con otro jugador (empate en puntos sin desempate por criterios). */
+  empatado?: boolean;
+}
+
+/** Estado de la fase final en ligas con gran final. */
+export interface FaseFinal {
+  /** La fase regular terminó y ya hay fase final. */
+  activa: boolean;
+  finalistas: string[];
+  tercero: string | null;
+  subcampeon: string | null;
+  /** Jugadores empatados que se juegan el pase a la final (si los hay). */
+  empateFinal: string[];
+  /** Jugadores empatados que se juegan el 3.er puesto (si los hay). */
+  empateTercero: string[];
 }
 
 export interface Vista extends Liga {
   tabla: Fila[];
+  fase_final: FaseFinal | null;
   formato_nombre: string;
   total_rondas: number;
   nombres_ronda: string[];
@@ -100,7 +129,12 @@ export const CONFIG_DEFECTO: Config = {
   rondas_suizo: 0,
   sorteo: false,
   desempate: ["puntos", "h2h", "dif_sets", "dif_puntos", "victorias"],
+  cierre: "gran_final",
 };
+
+export const esLiga = (cfg: Config) => cfg.formato === "rr1" || cfg.formato === "rr2";
+/** Liga con gran final: los empates en puntos comparten puesto y se definen en la mesa. */
+export const conGranFinal = (cfg: Config) => esLiga(cfg) && cfg.cierre === "gran_final";
 
 export class ErrorLiga extends Error {}
 
@@ -135,6 +169,7 @@ export function normalizarConfig(cfg: Partial<Config> | undefined, base: Config 
   if (final.puntos_set < 3 || final.puntos_set > 50) throw new ErrorLiga("Los puntos por set deben estar entre 3 y 50.");
   if (final.marcador !== "detallado" && final.marcador !== "sets") throw new ErrorLiga("Modo de marcador desconocido.");
   final.sorteo = Boolean(final.sorteo);
+  if (final.cierre !== "gran_final" && final.cierre !== "tabla") final.cierre = CONFIG_DEFECTO.cierre;
   const criterios = [...new Set(final.desempate.filter((c) => c in CRITERIOS))];
   final.desempate = criterios.length ? criterios : [...CONFIG_DEFECTO.desempate];
   return final;
@@ -275,7 +310,7 @@ export function generarCalendario(liga: Liga, conservar = false) {
   const partidos: Partido[] = [];
 
   if (cfg.formato === "rr1" || cfg.formato === "rr2") {
-    const viejos = new Map(previos.filter((p) => p.marcador).map((p) => [`${p.a}|${p.b}`, p]));
+    const viejos = new Map(previos.filter((p) => p.marcador && !p.fase).map((p) => [`${p.a}|${p.b}`, p]));
     roundRobin(ids, cfg.formato === "rr2").forEach((jornada, r) => {
       jornada.forEach(([a, b], o) => {
         const nuevo = crearPartido(r, o, a, b);
@@ -320,6 +355,7 @@ export function generarCalendario(liga: Liga, conservar = false) {
   liga.partidos = partidos;
   liga.generado = true;
   if (cfg.formato === "ko") propagarKO(liga);
+  actualizarFaseFinal(liga);
 }
 
 export function siguienteRondaSuizo(liga: Liga) {
@@ -456,12 +492,14 @@ export function registrarResultado(liga: Liga, mid: string, datos: DatosResultad
     throw new ErrorLiga("Indica el resultado del partido.");
   }
   if (cfg.formato === "ko") propagarKO(liga);
+  actualizarFaseFinal(liga);
   return p;
 }
 
 export function borrarResultado(liga: Liga, mid: string) {
   limpiar(buscarPartido(liga, mid));
   if (liga.config.formato === "ko") propagarKO(liga);
+  actualizarFaseFinal(liga);
 }
 
 // ---------------------------------------------------------------- tabla
@@ -485,7 +523,7 @@ export function tabla(liga: Liga, hastaRonda?: number): Fila[] {
     id: j.id, nombre: j.nombre, pj: 0, g: 0, p: 0, sf: 0, sc: 0, pf: 0, pc: 0,
     pts: 0, wo: 0, descansos: 0, racha: [], ds: 0, dp: 0, pos: 0,
   }]));
-  let jugados = liga.partidos.filter(terminado).sort((x, y) => x.ronda - y.ronda || x.orden - y.orden);
+  let jugados = liga.partidos.filter((p) => !p.fase && terminado(p)).sort((x, y) => x.ronda - y.ronda || x.orden - y.orden);
   if (hastaRonda !== undefined) jugados = jugados.filter((p) => p.ronda <= hastaRonda);
 
   for (const p of jugados) {
@@ -512,8 +550,130 @@ export function tabla(liga: Liga, hastaRonda?: number): Fila[] {
   }
   for (const f of filas.values()) { f.ds = f.sf - f.sc; f.dp = f.pf - f.pc; f.racha = f.racha.slice(-5); }
 
+  if (conGranFinal(cfg)) {
+    // Sin superioridad: a igualdad de puntos se comparte el puesto (1, 2, 2, 4…).
+    // El orden visible dentro del empate es alfabético y no significa nada.
+    const lista = [...filas.values()].sort((x, y) => y.pts - x.pts || x.nombre.localeCompare(y.nombre, "es"));
+    lista.forEach((f) => {
+      f.pos = 1 + lista.filter((o) => o.pts > f.pts).length;
+      f.empatado = lista.some((o) => o !== f && o.pts === f.pts);
+    });
+    return lista;
+  }
   const orden = ordenar([...filas.keys()], cfg.desempate, filas, jugados, cfg);
   return orden.map((id, i) => { const f = filas.get(id)!; f.pos = i + 1; return f; });
+}
+
+// ---------------------------------------------------------------- fase final (gran final)
+
+/** Orden de sorteo estable: sin superioridad entre empatados, pero igual en cada cálculo. */
+function sorteo(semilla: string, ids: string[]): string[] {
+  const h = (s: string) => { let x = 2166136261; for (const c of s) { x ^= c.charCodeAt(0); x = Math.imul(x, 16777619); } return x >>> 0; };
+  return [...ids].sort((a, b) => h(semilla + a) - h(semilla + b));
+}
+
+interface Plan { partidos: Partido[]; info: FaseFinal }
+
+/**
+ * Arma la fase final a partir de la tabla regular y de los partidos de fase final ya jugados:
+ * 1. Finalistas: los dos primeros. Si un empate en puntos cruza el 2.º puesto, se desempata
+ *    en la mesa (eliminación entre los empatados) hasta completar las dos plazas.
+ * 2. Gran final: 1.º contra 2.º.
+ * 3. Tercero: el siguiente en puntos; si hay empate, partido por el 3.er puesto.
+ * Los partidos que ya existen se reutilizan (conservan id y resultado).
+ */
+function planFaseFinal(liga: Liga, crear: boolean): Plan {
+  const reg = liga.partidos.filter((p) => !p.fase);
+  const previos = liga.partidos.filter((p) => p.fase);
+  const info: FaseFinal = { activa: false, finalistas: [], tercero: null, subcampeon: null, empateFinal: [], empateTercero: [] };
+  if (!conGranFinal(liga.config) || !liga.generado || !reg.length || !reg.every(terminado)) return { partidos: [], info };
+  info.activa = true;
+
+  const R = Math.max(...reg.map((p) => p.ronda)) + 1;
+  const usados = new Set<string>();
+  const partidos: Partido[] = [];
+  const cruce = (fase: Fase, fr: number, a: string, b: string): Partido => {
+    const clave = [a, b].sort().join("|");
+    let p = previos.find((x) => x.fase === fase && (x.fr ?? 0) === fr && [x.a, x.b].sort().join("|") === clave && !usados.has(x.id));
+    if (!p) p = crear ? crearPartido(R, 0, a, b, { fase, fr }) : { ...crearPartido(R, 0, a, b, { fase, fr }), id: `pendiente-${fase}-${fr}-${clave}` };
+    usados.add(p.id);
+    p.ronda = R;
+    p.orden = partidos.length;
+    partidos.push(p);
+    return p;
+  };
+  /** Eliminación entre empatados hasta dejar `plazas` jugadores. */
+  const eliminar = (grupo: string[], plazas: number, fase: Fase) => {
+    let vivos = sorteo(liga.id + fase, grupo);
+    const caidos: string[][] = [];
+    for (let fr = 0; vivos.length > plazas; fr++) {
+      const m = Math.min(vivos.length - plazas, Math.floor(vivos.length / 2));
+      const ronda = Array.from({ length: m }, (_, i) => cruce(fase, fr, vivos[2 * i], vivos[2 * i + 1]));
+      if (!ronda.every((p) => p.marcador)) return { clasificados: null, caidos };
+      const perdedores = ronda.map((p) => (ganador(p) === "a" ? p.b! : p.a!));
+      caidos.push(perdedores);
+      vivos = vivos.filter((x) => !perdedores.includes(x));
+    }
+    return { clasificados: vivos, caidos };
+  };
+
+  const filas = tabla(liga);
+  const grupos: string[][] = [];
+  for (const f of filas) {
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && filas.find((x) => x.id === ultimo[0])!.pts === f.pts) ultimo.push(f.id); else grupos.push([f.id]);
+  }
+
+  // 1. finalistas
+  const finalistas: string[] = [];
+  let i = 0;
+  let desempate: ReturnType<typeof eliminar> | null = null;
+  while (finalistas.length < 2 && i < grupos.length) {
+    const g = grupos[i++];
+    const libres = 2 - finalistas.length;
+    if (g.length <= libres) { finalistas.push(...g); continue; }
+    info.empateFinal = g;
+    desempate = eliminar(g, libres, "desempate");
+    if (desempate.clasificados) finalistas.push(...desempate.clasificados);
+    break;
+  }
+
+  // 2. gran final
+  if (finalistas.length === 2) {
+    const final = cruce("final", 0, finalistas[0], finalistas[1]);
+    info.finalistas = finalistas;
+    const g = ganador(final);
+    if (g) info.subcampeon = g === "a" ? final.b : final.a;
+  } else {
+    info.finalistas = finalistas;
+  }
+
+  // 3. tercer puesto
+  let candidatos: string[] | null = null;
+  if (desempate) candidatos = desempate.clasificados ? desempate.caidos[desempate.caidos.length - 1] ?? null : null;
+  else if (finalistas.length === 2 && grupos[i]) candidatos = grupos[i];
+  if (candidatos?.length === 1) info.tercero = candidatos[0];
+  else if (candidatos && candidatos.length > 1) {
+    info.empateTercero = candidatos;
+    info.tercero = eliminar(candidatos, 1, "tercero").clasificados?.[0] ?? null;
+  }
+  return { partidos, info };
+}
+
+/** Sincroniza los partidos de fase final con el estado actual de la liga. */
+export function actualizarFaseFinal(liga: Liga) {
+  const reg = liga.partidos.filter((p) => !p.fase);
+  liga.partidos = [...reg, ...planFaseFinal(liga, true).partidos];
+}
+
+export const faseFinal = (liga: Liga): FaseFinal => planFaseFinal(liga, false).info;
+
+export function etiquetaPartido(v: Vista, p: Partido): string {
+  const extra = p.fr ? ` · ronda ${p.fr + 1}` : "";
+  if (p.fase === "final") return "Gran final";
+  if (p.fase === "tercero") return `Por el 3.er puesto${extra}`;
+  if (p.fase === "desempate") return `Desempate por la final${extra}`;
+  return v.nombres_ronda[p.ronda] ?? `Ronda ${p.ronda + 1}`;
 }
 
 const VALOR: Record<Exclude<Criterio, "h2h">, (f: Fila) => number> = {
@@ -564,16 +724,21 @@ export function vista(liga: Liga): Vista {
     filas.forEach((f) => { f.mov = (anteriores.get(f.id) ?? f.pos) - f.pos; });
   }
 
+  const ff = conGranFinal(cfg) ? faseFinal(liga) : null;
   let campeon: string | null = null;
   if (fmt === "ko" && liga.partidos.length) {
     const final = liga.partidos.reduce((m, p) => (p.ronda > m.ronda ? p : m));
     campeon = terminado(final) ? ganadorId(final) : null;
+  } else if (ff) {
+    const final = liga.partidos.find((p) => p.fase === "final");
+    campeon = final && final.marcador ? ganadorId(final) : null;
   } else if (liga.generado && reales.length && jugados.length === reales.length) {
     if (fmt !== "suizo" || cerrada === totalRondas - 1) campeon = filas[0]?.id ?? null;
   }
 
   const nombres = Array.from({ length: totalRondas }, (_, r) =>
-    fmt === "ko" ? nombreRondaKO(r, totalRondas) : fmt === "suizo" ? `Ronda ${r + 1}` : `Jornada ${r + 1}`);
+    fmt === "ko" ? nombreRondaKO(r, totalRondas) : fmt === "suizo" ? `Ronda ${r + 1}`
+      : liga.partidos.some((p) => p.ronda === r && p.fase) ? "Fase final" : `Jornada ${r + 1}`);
 
   let puedeAvanzar = false;
   if (fmt === "suizo" && liga.generado) {
@@ -582,7 +747,7 @@ export function vista(liga: Liga): Vista {
   }
 
   return {
-    ...liga, tabla: filas, formato_nombre: FORMATOS[fmt], total_rondas: totalRondas, nombres_ronda: nombres,
+    ...liga, tabla: filas, fase_final: ff, formato_nombre: FORMATOS[fmt], total_rondas: totalRondas, nombres_ronda: nombres,
     jugados: jugados.length, total_partidos: reales.length, campeon, puede_avanzar: puedeAvanzar,
     sets_para_ganar: setsParaGanar(cfg),
   };
@@ -596,6 +761,7 @@ export function cambiarConfig(liga: Liga, cfg: Partial<Config>) {
     || nueva.puntos_set !== anterior.puntos_set);
   liga.config = nueva;
   if (regenerar) generarCalendario(liga, false);
+  else actualizarFaseFinal(liga);
 }
 
 export const requiereRegenerar = (liga: Liga, cfg: Config) =>
@@ -606,5 +772,7 @@ export function validarImportada(x: unknown): Liga {
   const l = x as Liga;
   if (!l || typeof l !== "object" || typeof l.id !== "string" || typeof l.nombre !== "string"
     || !Array.isArray(l.jugadores) || !Array.isArray(l.partidos)) throw new ErrorLiga("El archivo no tiene el formato de una liga.");
-  return { ...l, config: normalizarConfig(l.config), generado: Boolean(l.generado) };
+  const liga: Liga = { ...structuredClone(l), config: normalizarConfig(l.config), generado: Boolean(l.generado) };
+  actualizarFaseFinal(liga);
+  return liga;
 }

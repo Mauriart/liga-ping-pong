@@ -29,6 +29,7 @@ export const useLigas = create<Estado>()(
         if (!actual) throw new m.ErrorLiga("Liga no encontrada.");
         const copia = structuredClone(actual);
         fn(copia);
+        m.actualizarFaseFinal(copia);
         set({ ligas: get().ligas.map((l) => (l.id === id ? copia : l)) });
         return copia;
       },
@@ -45,7 +46,17 @@ export const useLigas = create<Estado>()(
       },
       setTema: (tema) => set({ tema }),
     }),
-    { name: "topspin.v2", storage: createJSONStorage(() => localStorage) },
+    {
+      name: "topspin.v2",
+      storage: createJSONStorage(() => localStorage),
+      // al cargar, pone al día ligas guardadas con versiones anteriores (reglas nuevas, fase final)
+      merge: (guardado, actual) => {
+        const g = (guardado ?? {}) as Partial<Estado>;
+        const ligas: m.Liga[] = [];
+        for (const l of g.ligas ?? []) { try { ligas.push(m.validarImportada(l)); } catch { /* liga dañada: se omite */ } }
+        return { ...actual, ...g, ligas };
+      },
+    },
   ),
 );
 

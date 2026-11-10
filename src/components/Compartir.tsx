@@ -38,9 +38,9 @@ export const Grafica = forwardRef<HTMLDivElement, { foto: Foto }>(function Grafi
         <table className="g-tabla">
           <thead><tr><th>#</th><th className="izq">Jugador</th><th>PJ</th><th>G</th><th>P</th><th>DS</th><th className="pts">PTS</th><th className="hide-xs">Racha</th></tr></thead>
           <tbody>
-            {foto.t.map(([nombre, pj, g, p, ds, pts, racha, mov], i) => (
-              <tr key={nombre} className={`p${i + 1}`}>
-                <td className="pos">{i + 1}{mov ? <small className={mov > 0 ? "sube" : "baja"}>{mov > 0 ? "▲" : "▼"}{Math.abs(mov)}</small> : null}</td>
+            {foto.t.map(([nombre, pj, g, p, ds, pts, racha, mov, puesto], i) => (
+              <tr key={nombre} className={`p${puesto ?? i + 1}`}>
+                <td className="pos">{puesto ?? i + 1}{puesto && foto.t.some((o, k) => k !== i && o[8] === puesto) ? <sup className="emp">=</sup> : null}{mov ? <small className={mov > 0 ? "sube" : "baja"}>{mov > 0 ? "▲" : "▼"}{Math.abs(mov)}</small> : null}</td>
                 <td className="izq"><span className="g-jug"><Avatar nombre={nombre} size="sm" />{nombre}</span></td>
                 <td>{pj}</td><td>{g}</td><td>{p}</td><td>{ds > 0 ? `+${ds}` : ds}</td><td className="pts">{pts}</td>
                 <td className="hide-xs"><span className="racha">{racha.split("").map((r, k) => <i key={k} className={r}>{r}</i>)}</span></td>
@@ -48,6 +48,13 @@ export const Grafica = forwardRef<HTMLDivElement, { foto: Foto }>(function Grafi
             ))}
           </tbody>
         </table>
+      )}
+      {foto.ff && (
+        <div className="g-ultimos"><span className="eyebrow">Fase final</span>
+          <div>{foto.ff.map(([etq, a, b, sa, sb], i) => (
+            <span key={i} className="g-res"><b className="g-etq">{etq}</b> <em className={sa !== null && sa > (sb ?? 0) ? "gana" : ""}>{a}</em> <b>{sa === null ? "vs" : `${sa}–${sb}`}</b> <em className={sb !== null && sb > (sa ?? 0) ? "gana" : ""}>{b}</em></span>
+          ))}</div>
+        </div>
       )}
       {foto.u.length > 0 && (
         <div className="g-ultimos"><span className="eyebrow">Últimos resultados</span>
