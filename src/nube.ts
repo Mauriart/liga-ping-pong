@@ -4,14 +4,20 @@
  */
 import * as m from "./engine/motor";
 
-/** Dirección fija del despliegue (se define en .env para que todos la usen). */
-export const URL_FIJA: string = (import.meta.env?.VITE_SHEETS_URL as string | undefined)?.trim() ?? "";
+/**
+ * Hoja oficial de la liga. Es pública a propósito: solo permite leer;
+ * guardar exige la clave de administrador, que vive en el script de la hoja.
+ * Se puede reemplazar con VITE_SHEETS_URL en .env (por ejemplo, para pruebas).
+ */
+const HOJA_OFICIAL = "https://script.google.com/macros/s/AKfycbyZCw7YBRxSRsx90clLcJdUTkaJp2SkpT94BOGJ3tkZQkHctYemAY1b3IjqHKoCyqwM/exec";
+export const URL_FIJA: string = ((import.meta.env?.VITE_SHEETS_URL as string | undefined)?.trim() || HOJA_OFICIAL);
 
 export class ErrorNube extends Error {}
 
 async function leerJson(r: Response) {
   let d: { ok?: boolean; error?: string; ligas?: unknown[] };
-  try { d = await r.json(); } catch { throw new ErrorNube("La hoja respondió algo que no es JSON. ¿La URL es la de la aplicación web (/exec)?"); }
+  try { d = await r.json(); }
+  catch { throw new ErrorNube("La hoja no responde como base de datos: revisa que el script esté pegado, guardado y publicado en una versión nueva (ver la guía)."); }
   if (!d.ok) throw new ErrorNube(d.error || "La hoja rechazó el pedido.");
   return d;
 }
